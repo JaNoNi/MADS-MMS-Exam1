@@ -2,7 +2,7 @@ import itertools
 import math
 from typing import Union
 
-import matplotlib.cm as cm
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -10,21 +10,23 @@ import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score
 
-# CMAP_PLT = sns.mpl_palette("jet", 6)
-# CMAP_SNS = plt.cm.jet(np.linspace(0, 1, 6))
+CMAP_PLT = {0: "darkorange", 1: "gold", 2: "lawngreen", 3: "lightseagreen", 4: "blue"}
 
 
 def __basic_cluster(x, y, hue, alpha, ax=None):
     if ax is None:
         ax = plt.gca()
+    if hue is not None:
+        hue = [CMAP_PLT[_key] for _key in hue]
     scatter = ax.scatter(x, y, marker="o", c=hue, alpha=alpha, s=25, edgecolor="k")
     return scatter
 
 
 def draw_clusters(x, y, ax, alpha=None, centers=None, hue=None, labels=None, legend_loc="best"):
-    scatter = __basic_cluster(x, y, hue, alpha=alpha, ax=ax)
+    __basic_cluster(x, y, hue, alpha=alpha, ax=ax)
     if hue is not None:
-        ax.legend(handles=scatter.legend_elements()[0], labels=set(hue), loc=legend_loc)
+        handles = [mpatches.Patch(color=CMAP_PLT[_key], label=_key) for _key in set(hue)]
+        ax.legend(handles=handles, loc=legend_loc)
     if centers is not None:
         for center in centers:
             ax.scatter(center[0], center[1], marker="*", c="red", s=100)
@@ -108,9 +110,9 @@ def draw_silhouette(data, number_k, labels, ax, random_state=None):
     ax.set_ylim([0, len(data) + (number_k + 1) * len(data) * gap])
 
     # Plot Cluster ----------------------
-    for i in range(number_k):
+    for ith_k in range(number_k):
         # Order the sscores
-        ith_sscore_values = sscore_values[cluster_labels == i]
+        ith_sscore_values = sscore_values[cluster_labels == ith_k]
         ith_sscore_values.sort()
         cluster_score = sum(ith_sscore_values)
 
@@ -118,10 +120,12 @@ def draw_silhouette(data, number_k, labels, ax, random_state=None):
         size_cluster_i = ith_sscore_values.shape[0]
         ith_sscore = cluster_score / size_cluster_i
         y_upper = y_lower + size_cluster_i
-        print("Cluster:%d with %d entries. Score: %f" % (i, size_cluster_i, round(ith_sscore, 2)))
+        print(
+            "Cluster:%d with %d entries. Score: %f" % (ith_k, size_cluster_i, round(ith_sscore, 2))
+        )
 
         # Create different colors for the clusters
-        color = cm.nipy_spectral(float(i) / number_k)
+        color = CMAP_PLT[ith_k]
         ax.fill_betweenx(
             np.arange(y_lower, y_upper),
             0,
@@ -132,7 +136,7 @@ def draw_silhouette(data, number_k, labels, ax, random_state=None):
         )
 
         # Label the silhouette plots with their cluster numbers at the middle
-        ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
+        ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(ith_k))
 
         # Compute the new y_lower for next plot
         y_lower = y_upper + len(data) * gap  # 10 for the 0 samples
@@ -212,7 +216,7 @@ def draw_boxplot(data, hue, labels, ax):
         right_index=True,
     )
     if not isinstance(ax, np.ndarray):
-        sns.boxplot(data=df, x="labels", y=0, ax=ax)
+        sns.boxplot(data=df, x="labels", palette=CMAP_PLT, y=0, ax=ax)
         if labels:
             ax.set_xlabel("Labels")
             ax.set_ylabel(f"{labels[1]}_0")
@@ -224,7 +228,7 @@ def draw_boxplot(data, hue, labels, ax):
     figure_combinations = list(itertools.product(*grid_size_combinations))
     column_names = [col for col in df.columns if col != "labels"]
     for column, (ax_1, ax_2) in zip(column_names, figure_combinations):
-        sns.boxenplot(data=df, x="labels", y=column, ax=ax[ax_1, ax_2])
+        sns.boxenplot(data=df, x="labels", palette=CMAP_PLT, y=column, ax=ax[ax_1, ax_2])
         if labels:
             ax[ax_1, ax_2].set_xlabel("Labels")
             ax[ax_1, ax_2].set_ylabel(f"{labels[1]}_{column}")

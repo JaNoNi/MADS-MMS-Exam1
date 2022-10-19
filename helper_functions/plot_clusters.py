@@ -5,35 +5,37 @@ from typing import Union
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sns
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_samples, silhouette_score
 
+# CMAP_PLT = sns.mpl_palette("jet", 6)
+# CMAP_SNS = plt.cm.jet(np.linspace(0, 1, 6))
 
-def _draw_cluster(x, y, hue, alpha, ax=None):
+
+def __basic_cluster(x, y, hue, alpha, ax=None):
     if ax is None:
         ax = plt.gca()
-    scatter = ax.scatter(
-        x,
-        y,
-        marker="o",
-        c=hue,
-        alpha=alpha,
-        s=25,
-        edgecolor="k",
-    )
+    scatter = ax.scatter(x, y, marker="o", c=hue, alpha=alpha, s=25, edgecolor="k")
     return scatter
 
 
-def draw_clusters(x, y, ax, alpha=None, hue=None, labels=None, legend_loc="best"):
-    scatter = _draw_cluster(x, y, hue, alpha=alpha, ax=ax)
+def draw_clusters(x, y, ax, alpha=None, centers=None, hue=None, labels=None, legend_loc="best"):
+    scatter = __basic_cluster(x, y, hue, alpha=alpha, ax=ax)
     if hue is not None:
         ax.legend(handles=scatter.legend_elements()[0], labels=set(hue), loc=legend_loc)
-    if labels:
+    if centers is not None:
+        for center in centers:
+            ax.scatter(center[0], center[1], marker="*", c="red", s=100)
+    if labels is not None:
         ax.set_xlabel(labels[0])
         ax.set_ylabel(labels[1])
 
 
-def draw_clusters_grid(data, hue, labels, legend_loc, ax, alpha=None):
+def draw_clusters_grid(
+    data, ax, alpha=None, centers=None, hue=None, labels=None, legend_loc="best"
+):
     feature_combinations = list(itertools.combinations(range(data.shape[1]), 2))
     grid_size_combinations = [list(range(ax.shape[0])), list(range(ax.shape[1]))]
     figure_combinations = list(itertools.product(*grid_size_combinations))
@@ -41,21 +43,26 @@ def draw_clusters_grid(data, hue, labels, legend_loc, ax, alpha=None):
         raise ValueError("The grid size is smaller than the number of features.")
     # Plot
     for (comb_1, comb_2), (ax_1, ax_2) in zip(feature_combinations, figure_combinations):
-        scatter = _draw_cluster(
-            data[:, comb_1], data[:, comb_2], hue, ax=ax[ax_1, ax_2], alpha=alpha
+        if centers is not None:
+            centers_ = centers[:, [comb_1, comb_2]]
+        else:
+            centers_ = centers
+        draw_clusters(
+            data[:, comb_1],
+            data[:, comb_2],
+            ax=ax[ax_1, ax_2],
+            alpha=alpha,
+            centers=centers_,
+            hue=hue,
+            labels=[f"{labels[0]}_{comb_1}", f"{labels[1]}_{comb_2}"],
+            legend_loc=legend_loc,
         )
-        if hue is not None:
-            ax[ax_1, ax_2].legend(
-                handles=scatter.legend_elements()[0], labels=set(hue), loc=legend_loc
-            )
-        if labels:
-            ax[ax_1, ax_2].set_xlabel(f"{labels[0]}_{comb_1}")
-            ax[ax_1, ax_2].set_ylabel(f"{labels[1]}_{comb_2}")
 
 
 def draw_ksscore(data, ks, labels, ax, random_state=None):
-    """Function that takes an array (or tuple of arrays) and calculates the silhouette scores for the different ks.
-    Plots the silhouette scores against the ks and saves the image as a pdf.
+    """
+    Function that takes an array (or tuple of arrays) and calculates the silhouette scores for the
+    different ks. Plots the silhouette scores against the ks and saves the image as a pdf.
 
     Args:
         data_list (array-like of shape (n_samples, n_features) or tuple): Input samples.
@@ -77,59 +84,12 @@ def draw_ksscore(data, ks, labels, ax, random_state=None):
     print(f"Max score: {max(sscore)}")
 
 
-def draw_plot(
-    data,
-    plot_type: str = "scatter",
-    hue=None,
-    alpha=None,
-    labels: list[str, str] = None,
-    figsize: tuple[int, int] = None,
-    grid_size=(1, 1),
-    legend_loc: str = "best",
-    dpi: int = None,
-    title: str = None,
-    shareaxes: bool = False,
-    ks: Union[int, list[int]] = None,
-    random_state: int = None,
-):
-    _, axes = plt.subplots(figsize=figsize, dpi=dpi, nrows=grid_size[0], ncols=grid_size[1])
-    if plot_type == "scatter":
-        draw_clusters(
-            data[:, 0], data[:, 1], axes, alpha=alpha, hue=hue, labels=labels, legend_loc=legend_loc
-        )
-    if plot_type == "grid":
-        # Create indexes
-        draw_clusters_grid(
-            data, alpha=alpha, hue=hue, labels=labels, legend_loc=legend_loc, ax=axes
-        )
-    if plot_type == "ksscore":
-        draw_ksscore(data, ks, labels=labels, ax=axes, random_state=random_state)
-    if plot_type == "silhouette":
-        draw_silhouette(data, ks, labels=labels, ax=axes, random_state=random_state)
-
-    if shareaxes:
-        lim_range = (math.floor(np.min(data)), math.ceil(np.max(data)))
-        plt.setp(axes, xlim=lim_range, ylim=lim_range)
-    if title:
-        # plt.suptitle(
-        #     "Silhouette analysis for KMeans clustering on Facebook data with n_clusters = %d"
-        #     fontsize=14,
-        #     fontweight="bold",
-        # )
-        plt.suptitle(title)
-    plt.show()
-
-
 def draw_silhouette(data, number_k, labels, ax, random_state=None):
-    """Creates Silhouette plot for the fiven dataset (datasets).
+    """Creates Silhouette plot for the given dataset.
 
-    Credit: https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html
-
-    Args:
-        data (array-like of shape (n_samples, n_features)): Input samples.
-        k_clusters (int): Number of clusters.
+    Credit:
+    https://scikit-learn.org/stable/auto_examples/cluster/plot_kmeans_silhouette_analysis.html
     """
-    # Generate clusters ----------------------
     kkm = KMeans(
         n_clusters=number_k, random_state=random_state, init="k-means++", max_iter=300, tol=0.0001
     )
@@ -182,6 +142,92 @@ def draw_silhouette(data, number_k, labels, ax, random_state=None):
     ax.set_ylabel(labels[1])
     ax.axvline(x=sscore, color="red", linestyle="--")
     ax.set_yticks([])  # Clear the yaxis labels / ticks
+
+
+def draw_plot(
+    data,
+    plot_type: str = "scatter",
+    hue=None,
+    alpha=None,
+    labels: list[str, str] = None,
+    figsize: tuple[int, int] = None,
+    grid_size=(1, 1),
+    legend_loc: str = "best",
+    dpi: int = None,
+    title: str = None,
+    shareaxes: bool = False,
+    ks: Union[int, list[int]] = None,
+    centers: np.ndarray = None,
+    random_state: int = None,
+):
+    _, axes = plt.subplots(figsize=figsize, dpi=dpi, nrows=grid_size[0], ncols=grid_size[1])
+    if plot_type == "scatter":
+        draw_clusters(
+            data[:, 0],
+            data[:, 1],
+            alpha=alpha,
+            centers=centers,
+            hue=hue,
+            labels=labels,
+            legend_loc=legend_loc,
+            ax=axes,
+        )
+    if plot_type == "grid":
+        # Create indexes
+        draw_clusters_grid(
+            data,
+            alpha=alpha,
+            centers=centers,
+            hue=hue,
+            labels=labels,
+            legend_loc=legend_loc,
+            ax=axes,
+        )
+    if plot_type == "ksscore":
+        draw_ksscore(data, ks, labels=labels, ax=axes, random_state=random_state)
+    if plot_type == "silhouette":
+        draw_silhouette(data, ks, labels=labels, ax=axes, random_state=random_state)
+    if plot_type == "boxplot":
+        draw_boxplot(data, hue, labels=labels, ax=axes)
+
+    if shareaxes:
+        lim_range = (math.floor(np.min(data)), math.ceil(np.max(data)))
+        plt.setp(axes, xlim=lim_range, ylim=lim_range)
+    if title:
+        # plt.suptitle(
+        #     "Silhouette analysis for KMeans clustering on Facebook data with n_clusters = %d"
+        #     fontsize=14,
+        #     fontweight="bold",
+        # )
+        plt.suptitle(title)
+    plt.tight_layout()
+    plt.show()
+
+
+def draw_boxplot(data, hue, labels, ax):
+    df = pd.merge(
+        pd.DataFrame(data),
+        pd.DataFrame(hue, columns=["labels"]),
+        left_index=True,
+        right_index=True,
+    )
+    if not isinstance(ax, np.ndarray):
+        sns.boxplot(data=df, x="labels", y=0, ax=ax)
+        if labels:
+            ax.set_xlabel("Labels")
+            ax.set_ylabel(f"{labels[1]}_0")
+        return
+
+    if len(ax.shape) == 1:
+        ax = np.array([ax])
+    grid_size_combinations = [list(range(ax.shape[0])), list(range(ax.shape[1]))]
+    figure_combinations = list(itertools.product(*grid_size_combinations))
+    column_names = [col for col in df.columns if col != "labels"]
+    for column, (ax_1, ax_2) in zip(column_names, figure_combinations):
+        sns.boxenplot(data=df, x="labels", y=column, ax=ax[ax_1, ax_2])
+        if labels:
+            ax[ax_1, ax_2].set_xlabel("Labels")
+            ax[ax_1, ax_2].set_ylabel(f"{labels[1]}_{column}")
 
 
 def main():
